@@ -1,0 +1,70 @@
+# ==================== DIPENDENZE BACKEND BOT WHATSAPP ====================
+
+# Framework Web
+
+flask==3.0.0
+flask-cors==4.0.0
+
+# WhatsApp Business API (via Twilio)
+
+twilio==8.10.0
+
+# Gestione variabili ambiente
+
+python-dotenv==1.0.0
+
+# HTTP Requests (per Firebase push notifications)
+
+requests==2.31.0
+
+# Database (opzionale - per produzione)
+
+# firebase-admin==6.2.0
+
+# psycopg2-binary==2.9.9  # Per PostgreSQL
+
+# pymongo==4.6.0          # Per MongoDB
+
+# Utilità
+
+python-dateutil==2.8.2
+
+# Server produzione (opzionale)
+
+gunicorn==21.2.0
+
+# Speech-to-Text (opzionale - per risposta vocale)
+
+# openai==1.3.0  # Per Whisper API
+
+# ==================== COME INSTALLARE ====================
+
+# 
+
+# pip install -r requirements.txt
+
+# 
+
+# ==================== NOTE ====================
+
+# 
+
+# Per WhatsApp hai 2 opzioni:
+
+# 
+
+# 1. TWILIO (più facile per iniziare)
+
+# - Sandbox gratuito per test
+
+# - Account: https://www.twilio.com/console
+
+# 
+
+# 2. META WHATSAPP BUSINESS API (produzione)
+
+# - Più complesso ma gratuito
+
+# - Richiede verifica business
+
+# 
