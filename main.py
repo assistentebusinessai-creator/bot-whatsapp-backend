@@ -525,6 +525,4 @@ def home():
 
 
 # ==================== AVVIO SERVER ====================
-
-if __name__ == 'main':
-    
+# gestito da gunicorn su Railway)
