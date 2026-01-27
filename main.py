@@ -293,8 +293,11 @@ class BotOfficina:
 
         riepilogo += f"\n📱 Cliente: {numero_cliente}"
 
-        # NOTIFICA AL TITOLARE
-        self.invia_notifica_titolare(riepilogo)
+        # NOTIFICA AL TITOLARE - PASSA CATEGORIA NON RIEPILOGO
+        if categoria == 'URGENTE':
+            self.invia_notifica_titolare(numero_cliente, dati, categoria)
+
+        print(f"📱 Richiesta salvata: {categoria} - {dati.get('auto')}")
 
         # Resetta conversazione
         del conversazioni[numero_cliente]
@@ -302,27 +305,34 @@ class BotOfficina:
         return "Perfetto, abbiamo preso in carico la tua richiesta 👍\nTi ricontatteremo al più presto su questo numero."
 
     def classifica_richiesta(self, problema_cod, urgenza):
-        """Classifica la richiesta in URGENTE, APPUNTAMENTO o PREVENTIVO"""
-        if problema_cod == '1' and urgenza == 'Auto non parte':
-            return 'URGENTE'
+        """Classifica la richiesta in URGENTE, MANUTENZIONE o PREVENTIVO"""
+        if problema_cod == '1':
+            if urgenza == 'Auto non parte':
+                return 'URGENTE'
+            else:
+                return 'MANUTENZIONE'
         elif problema_cod == '2':
-            return 'APPUNTAMENTO'
+            return 'MANUTENZIONE'
         elif problema_cod == '3':
             return 'PREVENTIVO'
         else:
-            return 'APPUNTAMENTO'
+            return 'MANUTENZIONE'
 
-    def invia_notifica_titolare(self, richiesta):
+    def invia_notifica_titolare(self, numero_cliente, dati, categoria):
         """Invia notifica push all'app del titolare"""
 
         # Se è URGENTE, invia notifica push immediata
-        if richiesta['categoria'] == 'URGENTE':
-            self.invia_push_notification(richiesta)
+        if categoria == 'URGENTE':
+            # Prepara dati per notifica
+            richiesta_notifica = {
+                'cliente': numero_cliente,
+                'auto': dati.get('auto'),
+                'urgenza': dati.get('urgenza'),
+                'categoria': categoria
+            }
+            self.invia_push_notification(richiesta_notifica)
 
-        # Per APPUNTAMENTO/PREVENTIVO: solo salvataggio (riepilogo giornaliero)
-        print(
-            f"📱 Richiesta salvata: {richiesta['categoria']} - {richiesta['auto']}"
-        )
+        print(f"📱 Notifica inviata: {categoria} - {dati.get('auto')}")
 
     def invia_push_notification(self, richiesta):
         """Invia notifica push Firebase all'app mobile"""
@@ -339,7 +349,7 @@ class BotOfficina:
         }
 
         payload = {
-            "to": "/topics/titolare_officina",  # Topic per il titolare
+            "to": "/topics/titolare_officina",
             "priority": "high",
             "notification": {
                 "title": "🚨 URGENZA",
@@ -348,7 +358,7 @@ class BotOfficina:
                 "badge": "1"
             },
             "data": {
-                "richiesta_id": richiesta['id'],
+                "cliente": richiesta['cliente'],
                 "categoria": richiesta['categoria'],
                 "click_action": "OPEN_URGENZE"
             }
