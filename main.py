@@ -3,6 +3,7 @@ from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 import os
 from datetime import datetime
+import sqlite3
 import json
 import requests
 from dotenv import load_dotenv
@@ -28,6 +29,126 @@ twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 conversazioni = {}
 richieste = []
 
+
+class DatabaseRichieste:
+
+    def __init__(self):
+        # Il database sarà salvato nella stessa cartella del progetto
+        self.db_path = 'richieste_officina.db'
+        self.crea_tabella()
+
+    def crea_tabella(self):
+        """Crea la tabella se non esiste"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS richieste (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_cliente TEXT NOT NULL,
+                auto TEXT,
+                problema TEXT,
+                problema_cod TEXT,
+                urgenza TEXT,
+                spie_comportamenti TEXT,
+                preferenza_orario TEXT,
+                tipo_intervento TEXT,
+                diagnosi_controllo TEXT,
+                categoria TEXT,
+                data_richiesta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                stato TEXT DEFAULT 'nuova'
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
+    def salva_richiesta(self, numero_cliente, dati, categoria):
+        """Salva una nuova richiesta nel database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                '''
+                INSERT INTO richieste 
+                (numero_cliente, auto, problema, problema_cod, urgenza, 
+                 spie_comportamenti, preferenza_orario, tipo_intervento, 
+                 diagnosi_controllo, categoria, data_richiesta, stato)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (numero_cliente, dati.get('auto'), dati.get('problema'),
+                  dati.get('problema_cod'), dati.get('urgenza'),
+                  dati.get('spie_comportamenti'),
+                  dati.get('preferenza_orario'), dati.get('tipo_intervento'),
+                  dati.get('diagnosi_controllo'), categoria,
+                  datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'nuova'))
+            conn.commit()
+            print(f"✅ Richiesta salvata per {numero_cliente}")
+        except Exception as e:
+            print(f"❌ Errore salvataggio: {e}")
+        finally:
+            conn.close()
+
+    def leggi_tutte_richieste(self):
+        """Legge tutte le richieste dal database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, numero_cliente, auto, problema, urgenza, 
+                   spie_comportamenti, preferenza_orario, tipo_intervento,
+                   diagnosi_controllo, categoria, data_richiesta, stato
+            FROM richieste 
+            ORDER BY data_richiesta DESC
+        ''')
+        richieste = cursor.fetchall()
+        conn.close()
+        return richieste
+
+    def leggi_richieste_nuove(self):
+        """Legge solo le richieste con stato 'nuova'"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, numero_cliente, auto, problema, urgenza,
+                   spie_comportamenti, preferenza_orario, tipo_intervento,
+                   diagnosi_controllo, categoria, data_richiesta, stato
+            FROM richieste 
+            WHERE stato = 'nuova'
+            ORDER BY data_richiesta DESC
+        ''')
+        richieste = cursor.fetchall()
+        conn.close()
+        return richieste
+
+    def aggiorna_stato(self, id_richiesta, nuovo_stato):
+        """Aggiorna lo stato di una richiesta (es: 'nuova' -> 'lavorata' -> 'completata')"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            UPDATE richieste 
+            SET stato = ? 
+            WHERE id = ?
+        ''', (nuovo_stato, id_richiesta))
+        conn.commit()
+        conn.close()
+
+    def elimina_richiesta(self, id_richiesta):
+        """Elimina una richiesta dal database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM richieste WHERE id = ?', (id_richiesta, ))
+        conn.commit()
+        conn.close()
+
+    def conta_richieste_nuove(self):
+        """Conta quante richieste nuove ci sono"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM richieste WHERE stato = "nuova"')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+
 # ==================== BOT WHATSAPP LOGIC ====================
 
 
@@ -46,8 +167,6 @@ class BotOfficina:
         }
 
     def gestisci_messaggio(self, numero_cliente, messaggio):
-        """Gestisce la conversazione step by step"""
-
         # Inizializza conversazione se nuova
         if numero_cliente not in conversazioni:
             conversazioni[numero_cliente] = {
@@ -82,14 +201,20 @@ class BotOfficina:
                 conv['dati']['problema'] = problemi[messaggio]
                 conv['dati']['problema_cod'] = messaggio
 
-                # Se è urgenza (1), chiedi dettagli
+                # Se è urgenza (1), chiedi dettagli urgenza
                 if messaggio == '1':
                     conv['step'] = 3
                     return self.steps[3]
-                else:
-                    # Chiudi conversazione per appuntamenti/preventivi
-                    return self.chiudi_conversazione(numero_cliente, None)
 
+                # Se è tagliando (2), prima domanda
+                elif messaggio == '2':
+                    conv['step'] = 4
+                    return "Hai notato qualche spia accesa sul cruscotto o comportamenti strani dell'auto?"
+
+                # Se è preventivo (3), prima domanda
+                elif messaggio == '3':
+                    conv['step'] = 6
+                    return "Di che tipo di intervento si tratta? (es: freni, gomme, carrozzeria, climatizzatore...)"
             else:
                 return "Per favore rispondi con 1, 2 o 3"
 
@@ -108,7 +233,30 @@ class BotOfficina:
             else:
                 return "Per favore rispondi con 1, 2 o 3"
 
-        return "Scusa, non ho capito. Riprova."
+        # STEP 4: Prima domanda tagliando (NUOVO)
+        elif step_corrente == 4:
+            conv['dati']['spie_comportamenti'] = messaggio
+            conv['step'] = 5
+            return "Hai preferenze di orario? Mattina o pomeriggio?"
+
+        # STEP 5: Seconda domanda tagliando (NUOVO)
+        elif step_corrente == 5:
+            conv['dati']['preferenza_orario'] = messaggio
+            return self.chiudi_conversazione(numero_cliente, None)
+
+        # STEP 6: Prima domanda preventivo (NUOVO)
+        elif step_corrente == 6:
+            conv['dati']['tipo_intervento'] = messaggio
+            conv['step'] = 7
+            return "Hai già una diagnosi o serve prima un controllo per capire il problema?"
+
+        # STEP 7: Seconda domanda preventivo (NUOVO)
+        elif step_corrente == 7:
+            conv['dati']['diagnosi_controllo'] = messaggio
+            return self.chiudi_conversazione(numero_cliente, None)
+
+        else:
+            return "Scusa, non ho capito. Riprova."
 
     def chiudi_conversazione(self, numero_cliente, urgenza):
         """Chiude la conversazione e salva la richiesta"""
@@ -119,25 +267,34 @@ class BotOfficina:
         categoria = self.classifica_richiesta(dati.get('problema_cod'),
                                               urgenza)
 
-        # Salva richiesta
-        richiesta = {
-            'id': len(richieste) + 1,
-            'cliente': numero_cliente,
-            'auto': dati.get('auto'),
-            'problema': dati.get('problema'),
-            'urgenza': urgenza,
-            'categoria': categoria,
-            'quando': dati.get('quando'),
-            'dettaglio_preventivo': dati.get('dettaglio_preventivo'),
-            'timestamp': datetime.now().isoformat(),
-            'stato': 'nuova',
-            'letto': False
-        }
+        # SALVA NEL DATABASE
+        db = DatabaseRichieste()
+        db.salva_richiesta(numero_cliente, dati, categoria)
 
-        richieste.append(richiesta)
+        # Prepara il messaggio riepilogativo per il titolare
+        riepilogo = f"📋 NUOVA RICHIESTA\n\n"
+        riepilogo += f"🚗 Auto: {dati.get('auto', 'N/D')}\n"
+        riepilogo += f"❗ Problema: {dati.get('problema', 'N/D')}\n"
+
+        # Aggiungi dettagli specifici in base al tipo di problema
+        if dati.get('problema_cod') == '1':
+            riepilogo += f"🚨 Urgenza: {urgenza}\n"
+            riepilogo += f"🏷️ Categoria: {categoria}\n"
+
+        elif dati.get('problema_cod') == '2':
+            riepilogo += f"💡 Spie/Comportamenti: {dati.get('spie_comportamenti', 'N/D')}\n"
+            riepilogo += f"🕐 Preferenza orario: {dati.get('preferenza_orario', 'N/D')}\n"
+            riepilogo += f"🏷️ Categoria: {categoria}\n"
+
+        elif dati.get('problema_cod') == '3':
+            riepilogo += f"🔧 Tipo intervento: {dati.get('tipo_intervento', 'N/D')}\n"
+            riepilogo += f"📋 Diagnosi: {dati.get('diagnosi_controllo', 'N/D')}\n"
+            riepilogo += f"🏷️ Categoria: {categoria}\n"
+
+        riepilogo += f"\n📱 Cliente: {numero_cliente}"
 
         # NOTIFICA AL TITOLARE
-        self.invia_notifica_titolare(richiesta)
+        self.invia_notifica_titolare(riepilogo)
 
         # Resetta conversazione
         del conversazioni[numero_cliente]
@@ -202,6 +359,40 @@ class BotOfficina:
             print(f"✅ Notifica inviata: {response.status_code}")
         except Exception as e:
             print(f"❌ Errore notifica: {e}")
+
+    def visualizza_richieste_titolare():
+        """Funzione per mostrare le richieste al titolare"""
+        db = DatabaseRichieste()
+
+        # Mostra solo le nuove
+        richieste_nuove = db.leggi_richieste_nuove()
+
+        print(f"\n{'='*50}")
+        print(f"📋 RICHIESTE NUOVE: {len(richieste_nuove)}")
+        print(f"{'='*50}\n")
+
+        for richiesta in richieste_nuove:
+            id_r, numero, auto, problema, urgenza, spie, orario, intervento, diagnosi, categoria, data, stato = richiesta
+
+            print(f"ID: {id_r}")
+            print(f"📱 Cliente: {numero}")
+            print(f"🚗 Auto: {auto}")
+            print(f"❗ Problema: {problema}")
+
+            if urgenza:
+                print(f"🚨 Urgenza: {urgenza}")
+            if spie:
+                print(f"💡 Spie: {spie}")
+            if orario:
+                print(f"🕐 Orario: {orario}")
+            if intervento:
+                print(f"🔧 Intervento: {intervento}")
+            if diagnosi:
+                print(f"📋 Diagnosi: {diagnosi}")
+
+                print(f"🏷️ {categoria}")
+                print(f"📅 Data: {data}")
+                print(f"{'-'*50}\n")
 
 
 # Inizializza bot
@@ -336,17 +527,4 @@ def home():
 # ==================== AVVIO SERVER ====================
 
 if __name__ == 'main':
-    print("""
-╔══════════════════════════════════════════╗
-║  🚗 BOT WHATSAPP OFFICINA - AVVIATO     ║
-╚══════════════════════════════════════════╝
-
-
-    📱 Webhook: /webhook/whatsapp
-    📊 API Richieste: /api/richieste
-    💬 API Risposta: /api/risposta
-    ✅ API Completa: /api/completa
-
-    """)
-
-app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run()
