@@ -527,4 +527,4 @@ def home():
 # ==================== AVVIO SERVER ====================
 
 if __name__ == 'main':
-    app.run()
+    
