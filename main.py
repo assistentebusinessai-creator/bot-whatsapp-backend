@@ -534,6 +534,33 @@ def home():
     })
 
 
+@app.route('/test', methods=['GET'])
+def test():
+    """Route di test per verificare che tutto funzioni"""
+    try:
+        # Test database
+        db = DatabaseRichieste()
+        count = db.conta_richieste_nuove()
+
+        # Test bot
+        bot_test = BotOfficina()
+
+        return jsonify({
+            'status': 'OK',
+            'database': 'funziona',
+            'richieste_nuove': count,
+            'bot': 'funziona',
+            'twilio_configured': bool(TWILIO_ACCOUNT_SID)
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'ERRORE',
+            'errore': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 # ==================== AVVIO SERVER ====================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
