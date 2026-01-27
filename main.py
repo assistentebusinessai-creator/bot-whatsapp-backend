@@ -272,7 +272,7 @@ class BotOfficina:
         db.salva_richiesta(numero_cliente, dati, categoria)
 
         # Prepara il messaggio riepilogativo per il titolare
-        riepilogo = f"📋 NUOVA RICHIESTA\n\n"
+        riepilogo = "📋 NUOVA RICHIESTA\n\n"
         riepilogo += f"🚗 Auto: {dati.get('auto', 'N/D')}\n"
         riepilogo += f"❗ Problema: {dati.get('problema', 'N/D')}\n"
 
@@ -525,4 +525,5 @@ def home():
 
 
 # ==================== AVVIO SERVER ====================
-# gestito da gunicorn su Railway)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000, debug=False)
