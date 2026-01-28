@@ -14,6 +14,12 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "PONG", 200
+
+
 # ==================== CONFIGURAZIONE ====================
 
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
