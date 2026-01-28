@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
 
-load_dotenv()
+# load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -22,7 +22,15 @@ TWILIO_WHATSAPP_NUMBER = os.getenv(
     'TWILIO_WHATSAPP_NUMBER')  # es: whatsapp:+14155238886
 FIREBASE_SERVER_KEY = os.getenv('FIREBASE_SERVER_KEY')  # Per notifiche push
 
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+# Crea client Twilio solo se le credenziali sono presenti
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    print("✅ Twilio client creato con successo")
+else:
+    twilio_client = None
+    print(
+        "⚠️ ATTENZIONE: Credenziali Twilio non configurate. Il bot non potrà inviare messaggi."
+    )
 
 # Database in-memory (usa Firebase/PostgreSQL in produzione)
 
@@ -472,6 +480,9 @@ def invia_risposta():
     if not richiesta:
         return jsonify({'error': 'Richiesta non trovata'}), 404
 
+    if not twilio_client:
+        return jsonify({'error': 'Twilio non configurato'}), 500
+
     # Invia messaggio WhatsApp al cliente
     try:
         message = twilio_client.messages.create(from_=TWILIO_WHATSAPP_NUMBER,
@@ -508,10 +519,13 @@ def completa_richiesta():
     messaggio_completato = "🚗 La sua auto è pronta per il ritiro.\nGrazie per aver scelto la nostra officina!"
 
     try:
+        if not twilio_client:
+            print("⚠️ Twilio non configurato - impossibile inviare messaggio")
+            return jsonify({'error': 'Twilio non configurato'}), 500
+
         message = twilio_client.messages.create(from_=TWILIO_WHATSAPP_NUMBER,
                                                 body=messaggio_completato,
                                                 to=richiesta['cliente'])
-
         richiesta['stato'] = 'completata'
         richiesta['completato_timestamp'] = datetime.now().isoformat()
 
