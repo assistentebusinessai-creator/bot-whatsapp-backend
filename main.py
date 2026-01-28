@@ -15,11 +15,6 @@ app = Flask(__name__)
 CORS(app)
 
 
-@app.route('/ping', methods=['GET'])
-def ping():
-    return "PONG", 200
-
-
 # ==================== CONFIGURAZIONE ====================
 
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
@@ -421,13 +416,14 @@ class BotOfficina:
 
 # Inizializza bot
 
-bot = BotOfficina()
+# bot = BotOfficina()
 
 # ==================== WEBHOOK WHATSAPP ====================
 
 
 @app.route('/webhook/whatsapp', methods=['POST'])
 def webhook_whatsapp():
+    return "bot non attivo"
     """Riceve messaggi WhatsApp da Twilio"""
 
     # Estrai dati da Twilio
