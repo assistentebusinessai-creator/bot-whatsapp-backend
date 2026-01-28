@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
 
-# load_dotenv()
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -416,14 +416,13 @@ class BotOfficina:
 
 # Inizializza bot
 
-# bot = BotOfficina()
+bot = BotOfficina()
 
 # ==================== WEBHOOK WHATSAPP ====================
 
 
 @app.route('/webhook/whatsapp', methods=['POST'])
 def webhook_whatsapp():
-    return "bot non attivo"
     """Riceve messaggi WhatsApp da Twilio"""
 
     # Estrai dati da Twilio
